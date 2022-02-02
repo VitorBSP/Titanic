@@ -25,6 +25,8 @@ scale_fill_discrete = \(...) ggplot2::scale_fill_brewer(... , palette="Set2") #F
 library(tidyverse)
 library(tidymodels)
 library(probably)
+class_metrics <- metric_set(accuracy, kap, precision, sensitivity, specificity)#, roc_auc)
+
 
 ```
 
@@ -93,7 +95,7 @@ final_metrics <- final_predict %>%
 #  count(.pred)
 
 yardstick::metrics(final_metrics, Survived, .pred)
-
+class_metrics(final_metrics, truth=Survived, estimate=.pred)
 
 #fit1 %>% 
 #  conf_table(0.5,"Matriz de Confusão com ponte de corte 0.5")
