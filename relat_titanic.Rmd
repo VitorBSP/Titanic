@@ -25,64 +25,137 @@ scale_fill_discrete = \(...) ggplot2::scale_fill_brewer(... , palette="Set2") #F
 library(tidyverse)
 library(tidymodels)
 library(probably)
+library(patchwork)
 class_metrics <- metric_set(accuracy, kap, precision, sensitivity, specificity)#, roc_auc)
 
 
 ```
 
+```{r functions}
+d=function(df,v1,v2,px){
+  df %>% 
+    ggplot(aes({{v1}},{{v2}})) +
+    geom_point(size=2.1,color="red")+
+    ggrepel::geom_text_repel(aes(label=n),size=2.8,point.padding = 0.3)
+}
+graph<-function(df,l){
+  df %>% 
+    as_tibble() %>% 
+      ggplot(aes(as.numeric(row.names(df  %>% as_tibble())),value))+
+      geom_point(color = 'black')+
+      geom_hline(yintercept=l, linetype="dashed", color = "red")+
+      geom_hline(yintercept=-l, linetype="dashed", color = "red")+
+      labs(x="Índice")
+    
+}
+fit2df<-function(fit) {
+  summary(fit) |>
+    (\(x) x$coefficients)() |>
+    data.frame() |>
+    round(3) |>
+    mutate(P.valor = ifelse(
+      `Pr...t..` < 0.001,"<0.001*",
+      ifelse(`Pr...t..` < 0.05, paste0(`Pr...t..`, '*', sep = ''), `Pr...t..`))) |>
+    select(-`Pr...t..`,
+      "Estimativa" = "Estimate",
+      "Desvio padrão" = "Std..Error",
+      "Estatística t" = "t.value"
+    )
+}
+dffts1<-function(fitn,lab1){
+  n = length(fitn$fitted.values)
+  dffits(fitn) %>% 
+ graph(2*sqrt(fitn$rank / n))+
+  labs(title={{lab1}},y="DFfits")
+}
+resid1<-function(residuon,lab1){
+ residuon %>% 
+  graph(3)+
+  geom_hline(yintercept = 0, linetype="dotted", color = "red")+
+  labs(title={{lab1}},y="Resíduo")
+}
+cook1<-function(fitn,lab1){
+    n = length(fitn$fitted.values)
+  cooks.distance(fitn) %>% 
+  graph(4/(n-fitn$rank ))+
+  labs(title={{lab1}},y="Distância de Cook")
+}
 
+alavanca1 <- function(fit){
+  h_bar=fit$rank/length(fit$fitted.values)
+  hatvalues(fit) %>%
+  graph(3*h_bar)+
+  labs(title="Alavancagem",y="Medida de Alavancagem")
+}
 
+```
 
 ```{r}
 df <- read_csv("Base de dados.csv")
-df <- df %>% mutate(Sex = factor(Sex, unique(Sex)), 
-                    Pclass = factor(Pclass, unique(Pclass)),
-                    Survived = factor(Survived, unique(Survived)))
+df <- df %>% 
+  mutate(Sex = factor(Sex, unique(Sex)), Pclass = factor(Pclass, unique(Pclass)),
+                    Survived = factor(Survived, unique(Survived))) %>% 
+  drop_na(Sex, Pclass, Survived, Age)
 ```
+
+# Introdução
+
+# Modelagem
+
+## Dados de teste e treino
+Realizamos a divisão da base de dados completa em outras duas: Dados de treino e Dados de teste, para assim pode verificar se os modelos propostos são bons para previsão fora da amostra, sem problemas de __overfitting__ e __underfitting__. Assim obtivemos as seguintes medidas para os dados de teste utilizando os modelos ajustados com os dados de treino:
 
 ```{r}
 data_split <- initial_split(df, prop = 3/4)
 df_train <- training(data_split)
 df_test  <- testing(data_split)
 
-recipe_titanic <- recipe(Survived ~ ., data = df_train) %>% 
+recipe_titanic <- recipe(Survived ~ ., data = df) %>% 
   update_role(PassengerId, Name, SibSp, Parch, Ticket, Fare, Cabin, Embarked, new_role = "ID") %>% 
   step_dummy(all_nominal_predictors())
-recipe_titanic1 <- recipe(Survived ~ ., data = df_train) %>% 
-  update_role(PassengerId, Name, SibSp, Parch, Ticket, Fare, Cabin, Embarked, new_role = "ID")
+#recipe_titanic1 <- recipe(Survived ~ ., data = df_train) %>% 
+#  update_role(PassengerId, Name, SibSp, Parch, Ticket, Fare, Cabin, Embarked, new_role = #"ID") %>% 
+#  step_dummy(Sex, Pclass,one_hot = T)
 
 eng_log <- logistic_reg() %>% 
   set_engine("glm")
+eng_lognet <- logistic_reg(penalty = double(1), mixture = double(1)) %>% 
+  set_engine("glmnet")
 
-df_work=workflow_set(list(recipe_dummies=recipe_titanic,recipe_onehot=recipe_titanic1),
-                     list(logistic=eng_log),cross=T)
+df_work=workflow_set(list(recipe_dummies=recipe_titanic),
+                     list(logistic=eng_log, logistic_net = eng_lognet),cross=T)
 fit1=df_work %>% 
   extract_workflow("recipe_dummies_logistic") %>% 
-  fit(data = train_data)
+  fit(data = df_train)
 fit2=df_work %>% 
-  extract_workflow("recipe_onehot_logistic") %>% 
-  fit(data = train_data)
-collect_metrics(ft1)
+  extract_workflow("recipe_dummies_logistic_net") %>%
+  fit(data = df_train)
+```
 
-glance(final_fit)
-
+```{r}
 fit1 %>%
   extract_fit_parsnip() %>% 
-  tidy()
+  tidy() %>%
+  mypdf1::pdf1_tbl('Estatísticas do Modelo 1 ajustado com os dados de treino')
+```
+Percebemos que esse modelo é um modelo de regressão logística comum, em que conseguimos obter erro padrão, estatística e p-valores, podendo fazer uma robusta análise inferencial.
+
+```{r}
+fit2 %>%
+  extract_fit_parsnip() %>% 
+  tidy() %>%
+  mypdf1::pdf1_tbl('Estatísticas do Modelo 2 ajustado com os dados de treino')
+```
+Ao contrário do modelo de cima, esse é um modelo focado para previsão dos dados, envolvendo mais técnicas de aprendizado de máquina, assim não podemos realizar a análise inferencial.
+
+```{r}
+#glance(final_fit)
 
 ft1 <- fit1 %>%  
   predict(new_data = df_test, type = "prob") %>% 
   bind_cols(df_test)
 
-final_fit <- df_work %>% 
-  extract_workflow("recipe_dummies_logistic") %>% 
-  fit(data = df)
-final_predict <- final_fit %>%  
-  predict(new_data = df, type = "prob") %>% 
-  bind_cols(df)
-
-
-final_metrics <- final_predict %>%
+fit1_metrics <- ft1 %>%
   mutate(
     .pred = make_two_class_pred(
       estimate = .pred_0, 
@@ -91,16 +164,170 @@ final_metrics <- final_predict %>%
     )
   ) 
 
-#segment_pred %>%
-#  count(.pred)
+class_metrics(fit1_metrics, truth=Survived, estimate=.pred) %>% select(-.estimator) %>%
+  mypdf1::pdf1_tbl('Métricas de Avaliação do Modelo 1 nos Dados de Treino')
+```
 
-yardstick::metrics(final_metrics, Survived, .pred)
-class_metrics(final_metrics, truth=Survived, estimate=.pred)
+```{r}
 
-#fit1 %>% 
-#  conf_table(0.5,"Matriz de Confusão com ponte de corte 0.5")
+#glance(final_fit)
+
+ft2 <- fit2 %>%  
+  predict(new_data = df_test, type = "prob") %>% 
+  bind_cols(df_test)
+
+fit2_metrics <- ft2 %>%
+  mutate(
+    .pred = make_two_class_pred(
+      estimate = .pred_0, 
+      levels = levels(Survived), 
+      threshold = 0.5,
+    )
+  ) 
+
+class_metrics(fit2_metrics, truth=Survived, estimate=.pred) %>% select(-.estimator) %>%
+  mypdf1::pdf1_tbl('Métricas de Avaliação do Modelo 2 nos Dados de Treino')
+```
+Percebemos que as métricas nos dois Modelos são muito próximas, porém o Modelo 1 que utiliza a engina glm padrão, Precisão e Especificidade e o Kappa de Cohen. O Modelo 2 tem Sensibilidade superior, mas quanto a Acurácia os dois modelos empatam. No entanto, são boas métricas para ambos os modelos assim seguiremos com eles, porém agora unindo os dados de treino e de teste.
+
+## Reajuste aos dados completos
+```{r}
+final1=df_work %>% 
+  extract_workflow("recipe_dummies_logistic") %>% 
+  fit(data = df)
+final2=df_work %>% 
+  extract_workflow("recipe_dummies_logistic_net") %>%
+  fit(data = df)
+
+final_predict1 <- final1 %>%  
+  predict(new_data = df, type = "prob") %>% 
+  bind_cols(df)
+
+final_metrics1 <- final_predict1 %>%
+  mutate(
+    .pred = make_two_class_pred(
+      estimate = .pred_0, 
+      levels = levels(Survived), 
+      threshold = 0.5,
+    )
+  )
 ```
 
 
+```{r}
+final1 %>%
+  extract_fit_parsnip() %>% 
+  tidy() %>%
+  mypdf1::pdf1_tbl('Estatísticas do Modelo 1')
+```
 
+Ajustando o Modelo 1, com todos os dados ainda obtemos significância em todas as variáveis.
+
+
+```{r}
+class_metrics(final_metrics1, truth=Survived, estimate=.pred) %>% select(-.estimator) %>%
+  mypdf1::pdf1_tbl('Métricas de Avaliação do Modelo 1')
+```
+Em relação as métricas, acontece algo curioso em relação ao modelo ajustado com os dados de teste, em que apenas a Sensibilidade acaba aumentando, mas ainda são bons valores, a Acurácia é de 78,9%.  
+
+```{r}
+final_predict2 <- final2 %>%  
+  predict(new_data = df, type = "prob") %>% 
+  bind_cols(df)
+
+final_metrics2 <- final_predict2 %>%
+  mutate(
+    .pred = make_two_class_pred(
+      estimate = .pred_0, 
+      levels = levels(Survived), 
+      threshold = 0.5,
+    )
+  )
+```
+
+
+```{r}
+final2 %>%
+  extract_fit_parsnip() %>% 
+  tidy() %>%
+  mypdf1::pdf1_tbl('Estatísticas do Modelo 2')
+```
+
+Ajustando o Modelo 2, possuímos valores extremamente semelhantes para as estimativas dos $\beta's$, assim as previsões devem permanecer parecidas. 
+
+```{r}
+class_metrics(final_metrics1, truth=Survived, estimate=.pred) %>% select(-.estimator) %>%
+  mypdf1::pdf1_tbl('Métricas de Avaliação do Modelo 2')
+```
+Para o modelo 2, aconteceu uma conjuntura  semelhante ao modelo 1, em que as métricas de avaliação acabam diminuindo do Modelo com os Dados de Treino para o Modelo com todos os dados, porém nesse caso nem a Sensibilidade aumentou. No entanto, analisando os valores percebemos que eles são semelhantes aos valores do Modelo 1. 
+
+## Equações dos modelos
+
+*Modelo 1:*
+
+`r equatiomatic::extract_eq(final1$fit$fit$fit, wrap = T)` 
+
+*Modelo 2:*
+
+`r equatiomatic::extract_eq(final2$fit$fit$fit, wrap = T)` 
+
+# Análise de Influência
+
+Nesta seção será realizada uma busca de observações atípicas no banco de dados, que assim possam estar influenciado a análise, também influenciado pelas junções de tipos realizados anteriomente, assim utilizaremos 5 análises para a verificação de pontos de influência: Análise de Resíduos Deviance, Envelope Simulado, Distância de Cook, Alavancagem e DFFits.
+
+```{r}
+ffit1 <- final1$fit$fit$fit
+ffit2 <- final2$fit$fit$fit
+```
+
+
+## Resíduos deviances vs indices
+
+```{r}
+residuo1 <- residuals(ffit1,type="deviance")
+resid1(residuo1,"Resíduos do Modelo 1")
+```
+Não observa-se algum resíduo fora dos limites especificados, indicando que não exista pontos de influência.
+
+## Envelope Simulado
+
+```{r, results = F, fig.show='hide'}
+g1 <- hnp::hnp(ffit1, resid.type="deviance", halfnormal = F)
+G1 <- with(g1, data.frame(x, lower, upper, median, residuals))
+```
+
+```{r}
+G1 %>%
+ggplot(aes(x)) +
+  geom_point(aes(y = residuals)) +
+  geom_line(aes(y = lower)) +
+  geom_line(aes(y = upper)) +
+  geom_line(aes(y = median), linetype = "dashed")
+```
+Todos os pontos estão dentro das bandas simuladas, indicando que a distribuição é adequada.
+
+### Distância de Cook
+
+```{r}
+cook1(ffit1, "Distância do Modelo Gamma") +
+    ggrepel::geom_text_repel(aes(label=1:nrow(df)),size=2.8,point.padding = 0.3)
+```
+
+Nota-se que as observações 47 e 49 ficam fora dos limites estipulados, mas sem achatar o gráfico da distância de cook, indicam que são potenciais pontos de influência, assim iremos tomar a decisão sobre a sua remoção posteriomente.
+
+### Alavancagem
+
+```{r}
+alavanca1(ffit1) +
+    ggrepel::geom_text_repel(aes(label=1:nrow(df)),size=2.8,point.padding = 0.3)
+```
+Observamos basicamente duas retas para a medida de alavancagem, mas nenhum delas fora dos limites estipulados, então não indicando pontos de influência.
+
+### DFFits
+
+```{r}
+dffts1(ffit1, "DFFits do Modelo Gamma")+
+    ggrepel::geom_text_repel(aes(label=1:nrow(df)),size=2.8,point.padding = 0.3)
+```
+Observamos que os pontos 5, 47 e 49 ficam fora dos limites estipulados, assim são candidatos a pontos de influência.
 
