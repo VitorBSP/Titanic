@@ -24,7 +24,7 @@ knitr::opts_chunk$set(echo=F,message=F,warning=F,fig.pos = 'H',fig.align = 'cent
 scale_fill_discrete = \(...) ggplot2::scale_fill_brewer(... , palette="Set2") #Fixa a scale do fill dos gráficos do ggplot2
 library(tidyverse)
 library(tidymodels)
-
+library(probably)
 
 ```
 
@@ -40,22 +40,63 @@ df <- df %>% mutate(Sex = factor(Sex, unique(Sex)),
 
 ```{r}
 data_split <- initial_split(df, prop = 3/4)
-train_data <- training(data_split)
-test_data  <- testing(data_split)
-recipe_titanic <- recipe(Survived ~ ., data = train_data) %>% 
+df_train <- training(data_split)
+df_test  <- testing(data_split)
+
+recipe_titanic <- recipe(Survived ~ ., data = df_train) %>% 
   update_role(PassengerId, Name, SibSp, Parch, Ticket, Fare, Cabin, Embarked, new_role = "ID") %>% 
   step_dummy(all_nominal_predictors())
-engine1 <- logistic_reg() %>% 
+recipe_titanic1 <- recipe(Survived ~ ., data = df_train) %>% 
+  update_role(PassengerId, Name, SibSp, Parch, Ticket, Fare, Cabin, Embarked, new_role = "ID")
+
+eng_log <- logistic_reg() %>% 
   set_engine("glm")
-wflow_titanic <-   workflow() %>% 
-  add_model(engine1) %>% 
-  add_recipe(recipe_titanic)
-fit1 <- wflow_titanic %>% 
+
+df_work=workflow_set(list(recipe_dummies=recipe_titanic,recipe_onehot=recipe_titanic1),
+                     list(logistic=eng_log),cross=T)
+fit1=df_work %>% 
+  extract_workflow("recipe_dummies_logistic") %>% 
   fit(data = train_data)
-  
+fit2=df_work %>% 
+  extract_workflow("recipe_onehot_logistic") %>% 
+  fit(data = train_data)
+collect_metrics(ft1)
+
+glance(final_fit)
+
 fit1 %>%
   extract_fit_parsnip() %>% 
   tidy()
+
+ft1 <- fit1 %>%  
+  predict(new_data = df_test, type = "prob") %>% 
+  bind_cols(df_test)
+
+final_fit <- df_work %>% 
+  extract_workflow("recipe_dummies_logistic") %>% 
+  fit(data = df)
+final_predict <- final_fit %>%  
+  predict(new_data = df, type = "prob") %>% 
+  bind_cols(df)
+
+
+final_metrics <- final_predict %>%
+  mutate(
+    .pred = make_two_class_pred(
+      estimate = .pred_0, 
+      levels = levels(Survived), 
+      threshold = 0.5,
+    )
+  ) 
+
+#segment_pred %>%
+#  count(.pred)
+
+yardstick::metrics(final_metrics, Survived, .pred)
+
+
+#fit1 %>% 
+#  conf_table(0.5,"Matriz de Confusão com ponte de corte 0.5")
 ```
 
 
