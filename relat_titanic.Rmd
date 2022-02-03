@@ -16,7 +16,6 @@ indent: true
 
 
 ```{r setup,include=F}
-
 options(digits=3)  #Arrendodamento
 options(scipen=999)
 ggplot2::theme_set(ggplot2::theme_minimal()) #Tema dos gráficos produzidos no ggplot2
@@ -304,30 +303,251 @@ ggplot(aes(x)) +
   geom_line(aes(y = upper)) +
   geom_line(aes(y = median), linetype = "dashed")
 ```
-Todos os pontos estão dentro das bandas simuladas, indicando que a distribuição é adequada.
+Percebemos que alguns pontos estão fora das bandas simuladas, então devemos procurar por pontos influentes.
 
-### Distância de Cook
+## Distância de Cook
 
 ```{r}
 cook1(ffit1, "Distância do Modelo Gamma") +
     ggrepel::geom_text_repel(aes(label=1:nrow(df)),size=2.8,point.padding = 0.3)
 ```
 
-Nota-se que as observações 47 e 49 ficam fora dos limites estipulados, mas sem achatar o gráfico da distância de cook, indicam que são potenciais pontos de influência, assim iremos tomar a decisão sobre a sua remoção posteriomente.
+Nota-se que principalmente a observação 241 fica fora dos limites estipulados, com achatamento do gráfico da distância de cook, indicam que são potenciais pontos de influência. Dentre os outros pontos fora das bandas simuladas se destacam as observações 272,333,386,397,452,499.
 
-### Alavancagem
+## Alavancagem
 
 ```{r}
 alavanca1(ffit1) +
     ggrepel::geom_text_repel(aes(label=1:nrow(df)),size=2.8,point.padding = 0.3)
 ```
-Observamos basicamente duas retas para a medida de alavancagem, mas nenhum delas fora dos limites estipulados, então não indicando pontos de influência.
+Nota-se que alguns pontos ficaram fora dos limites estipulados, sem achatamento do gráfico, mas indicam que são potenciais pontos de influência. Em relação as observações fora dos limites  da distância de cook apenas o 386 está fora, destaca-se também o ponto 617.
 
-### DFFits
+## DFFits
 
 ```{r}
-dffts1(ffit1, "DFFits do Modelo Gamma")+
+dffts1(ffit1, "DFFits do Modelo de Regressão Logística")+
     ggrepel::geom_text_repel(aes(label=1:nrow(df)),size=2.8,point.padding = 0.3)
 ```
-Observamos que os pontos 5, 47 e 49 ficam fora dos limites estipulados, assim são candidatos a pontos de influência.
+Observamos que os pontos 386 e 499 ficam fora dos limites estipulados de maneira mais contundente com as outras observações ficando próximos aos limites, assim são candidatos a pontos de influência.
+
+
+## Removendo pontos possivelmente influentes
+Nesta seção removeremos alguns pontos possivelmente influentes e faremos as analises para verificar se os pontos candidatos são realmente pontos influentes, verificando como fica a equação do modelo e suas métricas.
+
+### Modelo 3 
+Neste modelo removemos apenas as observações 241 e 386, foi a observação que mais achatou o gráfico e a que mais se repetiu, respectivamente, assim estimaremos os modelos sem elas.
+
+```{r}
+df1 <- rows_delete(df,tibble(PassengerId = c(df %>% mutate(n = 1:nrow(df)) %>% filter(n %in% c(386, 241)) %>% select(PassengerId) %>% unlist() %>% as.vector())))
+
+recipe_titanic_del <- recipe(Survived ~ ., data = df1) %>% 
+  update_role(PassengerId, Name, SibSp, Parch, Ticket, Fare, Cabin, Embarked, new_role = "ID") %>% 
+  step_dummy(all_nominal_predictors())
+
+
+del_work=workflow_set(list(recipe_del=recipe_titanic_del),
+                     list(logistic=eng_log),cross=T)
+final_del=del_work %>% 
+  extract_workflow("recipe_del_logistic") %>% 
+  fit(data = df1)
+
+
+final_predict_del <- final_del %>%  
+  predict(new_data = df1, type = "prob") %>% 
+  bind_cols(df1)
+
+final_metrics_del <- final_predict_del %>%
+  mutate(
+    .pred = make_two_class_pred(
+      estimate = .pred_0, 
+      levels = levels(Survived), 
+      threshold = 0.5,
+    )
+  )
+ffit_del <- final_del$fit$fit$fit
+```
+
+```{r}
+class_metrics(final_metrics_del, truth=Survived, estimate=.pred) %>% select(-.estimator) %>%
+  mypdf1::pdf1_tbl('Métricas de Avaliação do Modelo 3')
+```
+Nas métricas, nota-se uma ligeira melhora em todas.
+
+#### Envelope Simulado
+```{r}
+g1 <- hnp::hnp(ffit_del, resid.type="deviance", halfnormal = F)
+G1 <- with(g1, data.frame(x, lower, upper, median, residuals))
+G1 %>%
+ggplot(aes(x)) +
+  geom_point(aes(y = residuals)) +
+  geom_line(aes(y = lower)) +
+  geom_line(aes(y = upper)) +
+  geom_line(aes(y = median), linetype = "dashed")
+```
+Porém no Envelope Simulado não nota-se uma diferença expressiva para o correspondente do Modelo 1.
+
+#### Equação
+
+*Modelo 3:*
+
+`r equatiomatic::extract_eq(ffit_del, wrap = T)` 
+
+### Modelo 4
+Neste modelo, teremos uma aplicação mais radical da análise de influência retirando todos os pontos que contiveram pelo menos um *TRUE* (possível ponto de influência), na função `influence.measures` e posteriomente verificando a equação e as métricas.
+
+```{r}
+influ <- influence.measures(ffit1)
+
+as.data.frame(influ$is.inf) %>% filter_all(any_vars(. == TRUE)) %>% mypdf1::pdf1_tbl('Diferentes medidas de influência')
+```
+Assim, removeremos todos os pontos acima, pois já estão filtrados, todos que são candidatos a ponto de influência por alguma métrica.
+
+```{r}
+df2 <- rows_delete(df,tibble(PassengerId = c(df %>% mutate(n = 1:nrow(df)) %>% filter(n %in% c(58,60,63,101,118,147,163,166,216,219,229,231,241,244,272,314,323,333,344,358,366,386,397,406,407,440,451,452,459,492.499,526,592,603,609,617,642,658,662,665,670)) %>% select(PassengerId) %>% unlist() %>% as.vector())))
+
+
+recipe_titanic_del2 <- recipe(Survived ~ ., data = df2) %>% 
+  update_role(PassengerId, Name, SibSp, Parch, Ticket, Fare, Cabin, Embarked, new_role = "ID") %>% 
+  step_dummy(all_nominal_predictors())
+
+
+del_work2=workflow_set(list(recipe_del=recipe_titanic_del2),
+                     list(logistic=eng_log),cross=T)
+final_del2=del_work2 %>% 
+  extract_workflow("recipe_del_logistic") %>% 
+  fit(data = df2)
+
+
+final_predict_del2 <- final_del2 %>%  
+  predict(new_data = df2, type = "prob") %>% 
+  bind_cols(df2)
+
+final_metrics_del2 <- final_predict_del2 %>%
+  mutate(
+    .pred = make_two_class_pred(
+      estimate = .pred_0, 
+      levels = levels(Survived), 
+      threshold = 0.5,
+    )
+  )
+ffit_del2 <- final_del2$fit$fit$fit
+```
+
+```{r}
+class_metrics(final_metrics_del2, truth=Survived, estimate=.pred) %>% select(-.estimator) %>%
+  mypdf1::pdf1_tbl('Métricas de Avaliação do Modelo 4')
+```
+Percebemos uma melhora em relação ao modelo 3, logo temos uma melhora consideravel ao modelo 1.
+
+#### Envelope Simulado
+```{r}
+g1 <- hnp::hnp(ffit_del2, resid.type="deviance", halfnormal = F)
+G1 <- with(g1, data.frame(x, lower, upper, median, residuals))
+G1 %>%
+ggplot(aes(x)) +
+  geom_point(aes(y = residuals)) +
+  geom_line(aes(y = lower)) +
+  geom_line(aes(y = upper)) +
+  geom_line(aes(y = median), linetype = "dashed")
+```
+Reparemos que continua com pontos fora das bandas simuladas, no entanto dimuiu-se a quantidade.
+
+#### Equação
+
+*Modelo 4:*
+
+`r equatiomatic::extract_eq(ffit_del2, wrap = T)` 
+
+# Eu sobreviveria ao Titanic?
+Teste em todos os Modelos e testando variando a única classe que não temos certeza a classe, assim nos 4 modelos testei as 3 classes.
+
+*Modelo 1*
+```{r}
+#df[nrow(df) + 1,] <- 
+dfn <- df %>% add_row(Survived=NA, Pclass = as.factor(1), Name ='Vítor Bernardo Silveira Pereira', Sex = 'male', Age = 21) %>%
+  add_row(Survived=NA, Pclass = as.factor(2), Name ='Vítor Bernardo Silveira Pereira', Sex = 'male', Age = 21) %>% add_row(Survived=NA, Pclass = as.factor(3), Name ='Vítor Bernardo Silveira Pereira', Sex = 'male', Age = 21)
+dfn1 <- df1 %>% add_row(Survived=NA, Pclass = as.factor(1), Name ='Vítor Bernardo Silveira Pereira', Sex = 'male', Age = 21) %>%
+  add_row(Survived=NA, Pclass = as.factor(2), Name ='Vítor Bernardo Silveira Pereira', Sex = 'male', Age = 21) %>% add_row(Survived=NA, Pclass = as.factor(3), Name ='Vítor Bernardo Silveira Pereira', Sex = 'male', Age = 21)
+dfn2 <- df2 %>% add_row(Survived=NA, Pclass = as.factor(1), Name ='Vítor Bernardo Silveira Pereira', Sex = 'male', Age = 21) %>%
+  add_row(Survived=NA, Pclass = as.factor(2), Name ='Vítor Bernardo Silveira Pereira', Sex = 'male', Age = 21) %>% add_row(Survived=NA, Pclass = as.factor(3), Name ='Vítor Bernardo Silveira Pereira', Sex = 'male', Age = 21)
+
+eu_m1 <- final1 %>%  
+  predict(new_data = dfn, type = "prob") %>% 
+  bind_cols(dfn)
+eu_m2 <- final2 %>%  
+  predict(new_data = dfn, type = "prob") %>% 
+  bind_cols(dfn)
+eu_m3 <- final_del %>%  
+  predict(new_data = dfn1, type = "prob") %>% 
+  bind_cols(dfn1)
+eu_m4 <- final_del2 %>%  
+  predict(new_data = dfn2, type = "prob") %>% 
+  bind_cols(dfn2)
+
+
+eu_m1 <- eu_m1 %>%
+  mutate(
+    .pred = make_two_class_pred(
+      estimate = .pred_0, 
+      levels = levels(Survived), 
+      threshold = 0.5,
+    )
+  )
+
+eu_m2 <- eu_m2 %>%
+  mutate(
+    .pred = make_two_class_pred(
+      estimate = .pred_0, 
+      levels = levels(Survived), 
+      threshold = 0.5,
+    )
+  )
+
+eu_m3 <- eu_m3 %>%
+  mutate(
+    .pred = make_two_class_pred(
+      estimate = .pred_0, 
+      levels = levels(Survived), 
+      threshold = 0.5,
+    )
+  )
+
+eu_m4 <- eu_m4 %>%
+  mutate(
+    .pred = make_two_class_pred(
+      estimate = .pred_0, 
+      levels = levels(Survived), 
+      threshold = 0.5,
+    )
+  )
+```
+
+
+```{r}
+eu_m1[715:717,] %>% select(.pred, Pclass, Name, Sex, Age)%>%
+  mypdf1::pdf1_tbl('Previsão quanto a sobrevivência no Modelo 1')
+```
+
+Então, a previsão para o Modelo 1, eu apenas não sobreviveria se fosse na Classe 1.
+
+```{r}
+eu_m2[715:717,] %>% select(.pred, Pclass, Name, Sex, Age)%>%
+  mypdf1::pdf1_tbl('Previsão quanto a sobrevivência no Modelo 2')
+```
+
+Então, a previsão para o Modelo 2, eu apenas não sobreviveria se fosse na Classe 1, mesma previsão do Modelo anterior.
+
+```{r}
+eu_m3[713:715,] %>% select(.pred, Pclass, Name, Sex, Age)%>%
+  mypdf1::pdf1_tbl('Previsão quanto a sobrevivência no Modelo 3')
+```
+
+Então, a previsão para o Modelo 3, eu apenas não sobreviveria se fosse na Classe 1, mesma previsão dos Modelos anteriores.
+
+```{r}
+eu_m4[676:678,] %>% select(.pred, Pclass, Name, Sex, Age)%>%
+  mypdf1::pdf1_tbl('Previsão quanto a sobrevivência no Modelo 4')
+```
+
+Assim, concluímos que de acordo com os modelos testados, eu não sobreviveria apenas se embarcasse com a classe 1, no entanto seria o mais provável embarcar com a classe 1, de acordo com a situação financeira.  
 
