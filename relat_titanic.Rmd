@@ -98,7 +98,7 @@ df <- df %>%
 ```
 
 # Introdução
-Neste trabalho iremos relembrar uma das maiores tragédias  da história, Titanic, em 1912, provavelmente o desastre marítimos mais conhecidos da história. Assim, por meio desse trabalho pretendemos simular situações em que pessoas da atualidade fossem transportadas para a época do desastre, elas sobreviveriam ao Titanic? Utilizando regressão logística podemos prever a chance que qualquer pessoa teria de sobreviver à tragédia, assim utilizaremos alguns modelos para tentar garantir o máximo de confiabilidade possível.
+Neste trabalho iremos relembrar uma das maiores tragédias  da história, Titanic, em 1912, provavelmente o desastre marítimo mais conhecidos da história. Assim, por meio desse trabalho pretendemos simular situações em que pessoas da atualidade fossem transportadas para a época do desastre, elas sobreviveriam ao Titanic? Utilizando regressão logística podemos prever a chance que qualquer pessoa teria de sobreviver à tragédia, assim utilizaremos alguns modelos para tentar garantir o máximo de confiabilidade possível.
 
 
 # Modelagem
@@ -189,7 +189,7 @@ fit2_metrics <- ft2 %>%
 class_metrics(fit2_metrics, truth=Survived, estimate=.pred) %>% select(-.estimator) %>%
   mypdf1::pdf1_tbl('Métricas de Avaliação do Modelo 2 nos Dados de Treino')
 ```
-Percebemos que as métricas nos dois Modelos são muito próximas, porém o Modelo 1 que utiliza a engina glm padrão, Precisão e Especificidade e o Kappa de Cohen. O Modelo 2 tem Sensibilidade superior, mas quanto a Acurácia os dois modelos empatam. No entanto, são boas métricas para ambos os modelos assim seguiremos com eles, porém agora unindo os dados de treino e de teste.
+Percebemos que as métricas nos dois Modelos são muito próximas, porém o Modelo 1 que utiliza a engine `glm` padrão, tem melhores valores em Precisão e Especificidade e o Kappa de Cohen. O Modelo 2 tem Sensibilidade superior, mas quanto a Acurácia os dois modelos empatam. No entanto, são boas métricas para ambos os modelos assim seguiremos com eles, porém agora unindo os dados de treino e de teste.
 
 ## Reajuste aos dados completos
 Como a previsão para os dados de teste está boa, podemos reajustar e usar o banco de dados completo.
@@ -270,7 +270,7 @@ Para o modelo 2, aconteceu uma conjuntura  semelhante ao modelo 1, em que as mé
 
 # Análise de Influência
 
-Nesta seção será realizada uma busca de observações atípicas no banco de dados, que assim possam estar influenciado a análise, também influenciado pelas junções de tipos realizados anteriomente, assim utilizaremos 5 análises para a verificação de pontos de influência: Análise de Resíduos Deviance, Envelope Simulado, Distância de Cook, Alavancagem e DFFits.
+Nesta seção será realizada uma busca de observações atípicas no banco de dados, que assim possam estar influenciado a análise, também influenciado pelas junções de tipos realizados anteriomente, assim utilizaremos 5 análises para a verificação de pontos de influência: Análise de Resíduos Deviance, Envelope Simulado, Distância de Cook, Alavancagem e DFFits. No entanto, não foi possível realizar essas analises para o Modelo 2 pois ele possui a engine `glmnet`.
 
 ```{r}
 ffit1 <- final1$fit$fit$fit
@@ -551,21 +551,21 @@ eu_m2[715:717,] %>% select(.pred, Pclass, Name, Sex, Age)%>%
   mypdf1::pdf1_tbl('Previsão quanto a sobrevivência no Modelo 2')
 ```
 
-Então, a previsão para o Modelo 2, eu apenas sobreviveria se fosse na Classe 1, mesma previsão do Modelo anterior.
+Logo, a previsão para o Modelo 2, eu apenas sobreviveria se fosse na Classe 1, mesma previsão do Modelo anterior.
 
 ```{r}
 eu_m3[713:715,] %>% select(.pred, Pclass, Name, Sex, Age)%>%
   mypdf1::pdf1_tbl('Previsão quanto a sobrevivência no Modelo 3')
 ```
 
-Então, a previsão para o Modelo 3, eu apenas sobreviveria se fosse na Classe 1, mesma previsão dos Modelos anteriores.
+Assim percebemos, a previsão para o Modelo 3, eu apenas sobreviveria se fosse na Classe 1, mesma previsão dos Modelos anteriores.
 
 ```{r}
 eu_m4[676:678,] %>% select(.pred, Pclass, Name, Sex, Age)%>%
   mypdf1::pdf1_tbl('Previsão quanto a sobrevivência no Modelo 4')
 ```
 
-Assim, concluímos que de acordo com os modelos testados, eu sobreviveria apenas se embarcasse com a classe 1, no entanto seria o mais provável embarcar com a classe 3, de acordo com a situação financeira.  
+Contudo, concluímos que de acordo com os modelos testados, eu sobreviveria apenas se embarcasse com a classe 1, no entanto seria o mais provável embarcar com a classe 3, de acordo com a situação financeira.  
 
 # Razão de Chances
 
@@ -580,11 +580,11 @@ $$ \begin{aligned}
 Para encontrar razões de chance, iremos realizar o seguinte procedimento:
 $$\begin{aligned} e^{\log[\dfrac{ P( \operatorname{Sobreviver})}{ 1 - P( \operatorname{Sobreviver})}]} &= \dfrac{ P( \operatorname{Sobreviver})}{ 1 - P( \operatorname{Sobreviver})}\end{aligned}$$ 
 
-Assim chegamos em uma chance, para chegar em uma razão de chance vamos dividir o modelo, dado que a pessoa que queremos é estimar mulher por uma pessoa que seja homem?
+Primeiramente chegamos em uma chance, para chegar na razão de chance, vamos precisar de outra razão para encontrá-la, logo iremos considerar um modelo, dado que a pessoa que queremos é estimar mulher, e no outro modelo iremos considerar que a pessoa que seja homem:
 
 $$\begin{aligned}\dfrac{\dfrac{ P( \operatorname{Sobreviver | mulher})}{ 1 - P( \operatorname{Sobreviver | mulher})}}{\dfrac{ P( \operatorname{Sobreviver | homem})}{ 1 - P( \operatorname{Sobreviver | homem})}} &= \dfrac{e^{\beta_0 + \beta_{1}(\operatorname{Idade}) + \beta_{2}(\operatorname{Classe_1}) + \beta_{3}(\operatorname{Classe_2}  + \beta_{4}(\operatorname{Sexo\_feminino})}}{e^{\beta_0 + \beta_{1}(\operatorname{Idade}) + \beta_{2}(\operatorname{Classe_1}) + \beta_{3}(\operatorname{Classe_2})}} \end{aligned}$$
 
-Aplicando a propriedade da potência que divisão de potencias de bases iguais, temos subtração e assumindo que todas as outras variáveis são constantes chegamos que a razão de chances é:
+Aplicando a propriedade da potência que divisão de potencias de bases iguais, pode-se subtrair as potências, e assumindo que todas as outras variáveis são constantes chegamos que a razão de chances é:
 
 $$\begin{aligned}\operatorname{RC} &= e^{\beta_{4}}\end{aligned}$$
 
@@ -602,7 +602,7 @@ Em relação aos modelos, temos que o modelo que sobressai, com as melhores mét
 glance(final1) %>% add_row(glance(final_del)) %>% add_row(glance(final_del2)) %>%
   mypdf1::pdf1_tbl('Critérios de Seleção do Modelo para as Regressões Logisticas')
 ```
-Assim, percebemos que nos principais critérios de seleção AIC e BIC, o modelo 4, tem medidas consideravelmente menores e melhores. Para a Regressão Logística - GLM NET, temos:
+Assim, percebemos que nos principais critérios de seleção AIC e BIC, o modelo 4, tem medidas consideravelmente menores e melhores. Para a Regressão Logística - `glmnet`, temos:
 
 ```{r}
 glance(final2) %>%

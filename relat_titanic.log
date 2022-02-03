@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.23 (TeX Live 2021/W32TeX) (preloaded format=pdflatex 2022.1.16)  3 FEB 2022 04:40
+This is pdfTeX, Version 3.141592653-2.6-1.40.23 (TeX Live 2021/W32TeX) (preloaded format=pdflatex 2022.1.16)  3 FEB 2022 16:17
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -867,9 +867,10 @@ l.649
 ble.17}) has been already used, duplicate ignored
 <argument> ...shipout:D \box_use:N \l_shipout_box 
                                                   \__shipout_drop_firstpage_...
-l.684 
-      ] [16pdfTeX warning (ext4): destination with the same identifier (name{ta
-ble.18}) has been already used, duplicate ignored
+l.683 E
+       m relação aos modelos, temos que o modelo que sobressai, com as mel...
+] [16pdfTeX warning (ext4): destination with the same identifier (name{table.18
+}) has been already used, duplicate ignored
 <argument> ...shipout:D \box_use:N \l_shipout_box 
                                                   \__shipout_drop_firstpage_...
 l.723 \end{document}
@@ -910,7 +911,7 @@ nyTeX/texmf-dist/fonts/type1/public/lm/lmri10.pfb><c:/Users/user/AppData/Roamin
 g/TinyTeX/texmf-dist/fonts/type1/public/lm/lmsy10.pfb><c:/Users/user/AppData/Ro
 aming/TinyTeX/texmf-dist/fonts/type1/public/lm/lmsy7.pfb><c:/Users/user/AppData
 /Roaming/TinyTeX/texmf-dist/fonts/type1/public/lm/lmtt10.pfb>
-Output written on relat_titanic.pdf (16 pages, 606896 bytes).
+Output written on relat_titanic.pdf (16 pages, 607182 bytes).
 PDF statistics:
  350 PDF objects out of 1000 (max. 8388607)
  285 compressed objects within 3 object streams
