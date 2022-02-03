@@ -1,7 +1,6 @@
 ---
-title: "Aqui você coloca o título"
-author: "Aqui você coloca o autor(s)"
-abstract: "Aqui você escreve o resumo"
+title: "Você sobreviveria ao Titanic?"
+author: "Eu, Vítor Pereira, não."
 header-includes:
    - \usepackage[brazil]{babel}
    - \usepackage{bm}
@@ -31,6 +30,7 @@ class_metrics <- metric_set(accuracy, kap, precision, sensitivity, specificity)#
 ```
 
 ```{r functions}
+set.seed(123)
 d=function(df,v1,v2,px){
   df %>% 
     ggplot(aes({{v1}},{{v2}})) +
@@ -98,8 +98,11 @@ df <- df %>%
 ```
 
 # Introdução
+Neste trabalho iremos relembrar uma das maiores tragédias  da história, Titanic, em 1912, provavelmente o desastre marítimos mais conhecidos da história. Assim, por meio desse trabalho pretendemos simular situações em que pessoas da atualidade fossem transportadas para a época do desastre, elas sobreviveriam ao Titanic? Utilizando regressão logística podemos prever a chance que qualquer pessoa teria de sobreviver à tragédia, assim utilizaremos alguns modelos para tentar garantir o máximo de confiabilidade possível.
+
 
 # Modelagem
+Começaremos com dois modelos de regressão logística, um modelo utilizando a engine `glm`, muito conhecida e utilizada para realização de modelos inferenciais e a engine `glmnet` muito utilizada para modelos preditivos de aprendizado de máquina.
 
 ## Dados de teste e treino
 Realizamos a divisão da base de dados completa em outras duas: Dados de treino e Dados de teste, para assim pode verificar se os modelos propostos são bons para previsão fora da amostra, sem problemas de __overfitting__ e __underfitting__. Assim obtivemos as seguintes medidas para os dados de teste utilizando os modelos ajustados com os dados de treino:
@@ -168,7 +171,6 @@ class_metrics(fit1_metrics, truth=Survived, estimate=.pred) %>% select(-.estimat
 ```
 
 ```{r}
-
 #glance(final_fit)
 
 ft2 <- fit2 %>%  
@@ -190,6 +192,8 @@ class_metrics(fit2_metrics, truth=Survived, estimate=.pred) %>% select(-.estimat
 Percebemos que as métricas nos dois Modelos são muito próximas, porém o Modelo 1 que utiliza a engina glm padrão, Precisão e Especificidade e o Kappa de Cohen. O Modelo 2 tem Sensibilidade superior, mas quanto a Acurácia os dois modelos empatam. No entanto, são boas métricas para ambos os modelos assim seguiremos com eles, porém agora unindo os dados de treino e de teste.
 
 ## Reajuste aos dados completos
+Como a previsão para os dados de teste está boa, podemos reajustar e usar o banco de dados completo.
+
 ```{r}
 final1=df_work %>% 
   extract_workflow("recipe_dummies_logistic") %>% 
@@ -261,14 +265,8 @@ class_metrics(final_metrics1, truth=Survived, estimate=.pred) %>% select(-.estim
 Para o modelo 2, aconteceu uma conjuntura  semelhante ao modelo 1, em que as métricas de avaliação acabam diminuindo do Modelo com os Dados de Treino para o Modelo com todos os dados, porém nesse caso nem a Sensibilidade aumentou. No entanto, analisando os valores percebemos que eles são semelhantes aos valores do Modelo 1. 
 
 ## Equações dos modelos
-
-*Modelo 1:*
-
 `r equatiomatic::extract_eq(final1$fit$fit$fit, wrap = T)` 
 
-*Modelo 2:*
-
-`r equatiomatic::extract_eq(final2$fit$fit$fit, wrap = T)` 
 
 # Análise de Influência
 
@@ -331,10 +329,10 @@ dffts1(ffit1, "DFFits do Modelo de Regressão Logística")+
 Observamos que os pontos 386 e 499 ficam fora dos limites estipulados de maneira mais contundente com as outras observações ficando próximos aos limites, assim são candidatos a pontos de influência.
 
 
-## Removendo pontos possivelmente influentes
+# Removendo pontos possivelmente influentes
 Nesta seção removeremos alguns pontos possivelmente influentes e faremos as analises para verificar se os pontos candidatos são realmente pontos influentes, verificando como fica a equação do modelo e suas métricas.
 
-### Modelo 3 
+## Modelo 3 
 Neste modelo removemos apenas as observações 241 e 386, foi a observação que mais achatou o gráfico e a que mais se repetiu, respectivamente, assim estimaremos os modelos sem elas.
 
 ```{r}
@@ -373,9 +371,13 @@ class_metrics(final_metrics_del, truth=Survived, estimate=.pred) %>% select(-.es
 ```
 Nas métricas, nota-se uma ligeira melhora em todas.
 
-#### Envelope Simulado
-```{r}
+### Envelope Simulado
+```{r, results = F, fig.show='hide'}
 g1 <- hnp::hnp(ffit_del, resid.type="deviance", halfnormal = F)
+```
+
+
+```{r}
 G1 <- with(g1, data.frame(x, lower, upper, median, residuals))
 G1 %>%
 ggplot(aes(x)) +
@@ -386,13 +388,18 @@ ggplot(aes(x)) +
 ```
 Porém no Envelope Simulado não nota-se uma diferença expressiva para o correspondente do Modelo 1.
 
-#### Equação
+### Modelo
+```{r}
+final_del %>%
+  extract_fit_parsnip() %>% 
+  tidy() %>%
+  mypdf1::pdf1_tbl('Estatísticas do Modelo 3')
+```
+Continuamos com todas as covariáveis significativas, tem-se pequenas diferenças nos $\beta$ 
 
-*Modelo 3:*
 
-`r equatiomatic::extract_eq(ffit_del, wrap = T)` 
 
-### Modelo 4
+## Modelo 4
 Neste modelo, teremos uma aplicação mais radical da análise de influência retirando todos os pontos que contiveram pelo menos um *TRUE* (possível ponto de influência), na função `influence.measures` e posteriomente verificando a equação e as métricas.
 
 ```{r}
@@ -439,10 +446,14 @@ class_metrics(final_metrics_del2, truth=Survived, estimate=.pred) %>% select(-.e
 ```
 Percebemos uma melhora em relação ao modelo 3, logo temos uma melhora consideravel ao modelo 1.
 
-#### Envelope Simulado
-```{r}
+### Envelope Simulado
+```{r, results = F, fig.show='hide'}
 g1 <- hnp::hnp(ffit_del2, resid.type="deviance", halfnormal = F)
 G1 <- with(g1, data.frame(x, lower, upper, median, residuals))
+```
+
+
+```{r}
 G1 %>%
 ggplot(aes(x)) +
   geom_point(aes(y = residuals)) +
@@ -452,11 +463,16 @@ ggplot(aes(x)) +
 ```
 Reparemos que continua com pontos fora das bandas simuladas, no entanto dimuiu-se a quantidade.
 
-#### Equação
+### Modelo
+```{r}
+final_del2 %>%
+  extract_fit_parsnip() %>% 
+  tidy() %>%
+  mypdf1::pdf1_tbl('Estatísticas do Modelo 4')
+```
+Continuamos com todas as covariáveis significativas, porém podemos perceber que cada vez o p-valor é menor e a tem-se diferenças claras nos $\beta's$, aumentos significativos matematicamente em Classe 1, Classe 2 e Sexo Feminino, diminuição no $\beta$ do Intercepto.
 
-*Modelo 4:*
 
-`r equatiomatic::extract_eq(ffit_del2, wrap = T)` 
 
 # Eu sobreviveria ao Titanic?
 Teste em todos os Modelos e testando variando a única classe que não temos certeza a classe, assim nos 4 modelos testei as 3 classes.
@@ -528,26 +544,72 @@ eu_m1[715:717,] %>% select(.pred, Pclass, Name, Sex, Age)%>%
   mypdf1::pdf1_tbl('Previsão quanto a sobrevivência no Modelo 1')
 ```
 
-Então, a previsão para o Modelo 1, eu apenas não sobreviveria se fosse na Classe 1.
+Então, a previsão para o Modelo 1, eu apenas sobreviveria se fosse na Classe 1.
 
 ```{r}
 eu_m2[715:717,] %>% select(.pred, Pclass, Name, Sex, Age)%>%
   mypdf1::pdf1_tbl('Previsão quanto a sobrevivência no Modelo 2')
 ```
 
-Então, a previsão para o Modelo 2, eu apenas não sobreviveria se fosse na Classe 1, mesma previsão do Modelo anterior.
+Então, a previsão para o Modelo 2, eu apenas sobreviveria se fosse na Classe 1, mesma previsão do Modelo anterior.
 
 ```{r}
 eu_m3[713:715,] %>% select(.pred, Pclass, Name, Sex, Age)%>%
   mypdf1::pdf1_tbl('Previsão quanto a sobrevivência no Modelo 3')
 ```
 
-Então, a previsão para o Modelo 3, eu apenas não sobreviveria se fosse na Classe 1, mesma previsão dos Modelos anteriores.
+Então, a previsão para o Modelo 3, eu apenas sobreviveria se fosse na Classe 1, mesma previsão dos Modelos anteriores.
 
 ```{r}
 eu_m4[676:678,] %>% select(.pred, Pclass, Name, Sex, Age)%>%
   mypdf1::pdf1_tbl('Previsão quanto a sobrevivência no Modelo 4')
 ```
 
-Assim, concluímos que de acordo com os modelos testados, eu não sobreviveria apenas se embarcasse com a classe 1, no entanto seria o mais provável embarcar com a classe 1, de acordo com a situação financeira.  
+Assim, concluímos que de acordo com os modelos testados, eu sobreviveria apenas se embarcasse com a classe 1, no entanto seria o mais provável embarcar com a classe 3, de acordo com a situação financeira.  
 
+# Razão de Chances
+
+Nesta seção iremos verificar algumas razões de chance muito interessante sobre o desastre do Titanic.
+
+*Modelo Geral*
+
+$$ \begin{aligned}
+\log\left[ \frac { P( \operatorname{Sobreviver})}{ 1 - P( \operatorname{Sobreviver}) } \right] &= \beta_0 + \beta_{1}(\operatorname{Idade}) + \beta_{2}(\operatorname{Classe_1}) + \beta_{3}(\operatorname{Classe_2})\ + \\&\quad \beta_{4}(\operatorname{Sexo\_feminino})
+\end{aligned} $$
+
+Para encontrar razões de chance, iremos realizar o seguinte procedimento:
+$$\begin{aligned} e^{\log[\dfrac{ P( \operatorname{Sobreviver})}{ 1 - P( \operatorname{Sobreviver})}]} &= \dfrac{ P( \operatorname{Sobreviver})}{ 1 - P( \operatorname{Sobreviver})}\end{aligned}$$ 
+
+Assim chegamos em uma chance, para chegar em uma razão de chance vamos dividir o modelo, dado que a pessoa que queremos é estimar mulher por uma pessoa que seja homem?
+
+$$\begin{aligned}\dfrac{\dfrac{ P( \operatorname{Sobreviver | mulher})}{ 1 - P( \operatorname{Sobreviver | mulher})}}{\dfrac{ P( \operatorname{Sobreviver | homem})}{ 1 - P( \operatorname{Sobreviver | homem})}} &= \dfrac{e^{\beta_0 + \beta_{1}(\operatorname{Idade}) + \beta_{2}(\operatorname{Classe_1}) + \beta_{3}(\operatorname{Classe_2}  + \beta_{4}(\operatorname{Sexo\_feminino})}}{e^{\beta_0 + \beta_{1}(\operatorname{Idade}) + \beta_{2}(\operatorname{Classe_1}) + \beta_{3}(\operatorname{Classe_2})}} \end{aligned}$$
+
+Aplicando a propriedade da potência que divisão de potencias de bases iguais, temos subtração e assumindo que todas as outras variáveis são constantes chegamos que a razão de chances é:
+
+$$\begin{aligned}\operatorname{RC} &= e^{\beta_{4}}\end{aligned}$$
+
+Assim, podemos calcular a razão de chance para todos os modelos.
+
+Entãos temos que as razões de chance para o modelos 1, 2, 3 e 4 são: `r exp(2.5227809)`, `r exp(2.0965399)`, `r exp(2.5471959)` e `r exp(3.7986619)`. Então de acordo com os modelos ajustados a chance de pessoas do sexo feminino sobreviveram variam de 8.13 a 44.64 vezes maior do que para pessoas do sexo masculino sobreviverem. 
+
+# Conclusão
+
+Observando a equação de todos os modelos, nota-se um padrão, as covariáveis que mais influenciam para sobrevivência são embarcar na primeira classe, ser uma pessoa do sexo feminino e embarcar na segunda classe. Em contrapartida a covariável que menos impacta é a idade, visto que, com maior idade menos provável de sobreviver. Assim, o modelo nos indica que no resgate houve preferência, então, pelas pessoas da primeira classe (mais ricas), mulheres e posteriormente crianças. As mulheres tem incríveis 44 vezes mais chances de sobreviver do que os homens de acordo com o Modelo 4, já segundo esse modelo as pessoas de primeira classe tem 82.5 vezes mais chances de sobreviver que pessoas em terceira classe. Comparando com a segunda classe, as pessoas que embarcaram na primeira classe tem 7.6 vezes mais chances de sobreviver.
+
+Em relação aos modelos, temos que o modelo que sobressai, com as melhores métricas é o modelo 4, consideravelmente a frente do modelo 1 (inicial) e do modelo 3 (com poucas remoções de pontos influentes), percebemos que o modelo 2 é o que se sai pior nessas métricas, também podemos avaliar os critérios de seleção do modelo: 
+
+```{r}
+glance(final1) %>% add_row(glance(final_del)) %>% add_row(glance(final_del2)) %>%
+  mypdf1::pdf1_tbl('Critérios de Seleção do Modelo para as Regressões Logisticas')
+```
+Assim, percebemos que nos principais critérios de seleção AIC e BIC, o modelo 4, tem medidas consideravelmente menores e melhores. Para a Regressão Logística - GLM NET, temos:
+
+```{r}
+glance(final2) %>%
+  mypdf1::pdf1_tbl('Critérios de Seleção do Modelo - GLMNET')
+```
+Assim comparando esses critérios com o da Tabela acima, podemos perceber que os outros modelos são superiores. Então para a seleção do melhor modelo temos que levar em consideração alguns fatores, que o Modelo 4 foi o melhor modelo no geral, em métricas de acurácia e critérios de seleção, logo o melhor modelo para previsão dos dados. 
+
+No entanto, o Modelo 1, com todos os dados pode ser o mais correto inferencialmente, pois seria o mais representativo em relação a população, também pode estar sendo mais cauteloso quanto ao pressuposto de amostra aleatória, o que no Modelo 4 quebramos com a remoção das observações.
+
+Tendo essas observações em vista e sem um estudo mais aprofundado para a remoção de pontos influentes, a escolha para o Modelo 4, seria para um modelo com melhor capacidade preditiva e a escolha para o Modelo 1, seria para um modelo com melhores conclusões inferenciais.
